@@ -1,0 +1,184 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teacher - ShreeJi Classes</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head><body>
+<div class="app">
+<header><img src="/logo.jpg" alt="Logo" style="width:32px;height:32px;border-radius:8px;object-fit:cover"><h1 class="brand">SHREE JI CLASSES</h1><div class="header-actions"><button class="icon-btn notif-btn" onclick="showNotifs()" id="notifBtn"><span class="material-icons-round">notifications</span><span class="notif-badge" id="notifBadge" style="display:none">0</span></button><span id="userName"></span><button onclick="logout()" class="icon-btn"><span class="material-icons-round">logout</span></button></div></header>
+<main id="content"></main>
+<nav class="bottom-nav">
+<button class="nav-btn active" data-tab="dashboard"><span class="material-icons-round">dashboard</span><span>Home</span></button>
+<button class="nav-btn" data-tab="students"><span class="material-icons-round">people</span><span>Students</span></button>
+<button class="nav-btn" data-tab="fees"><span class="material-icons-round">account_balance_wallet</span><span>Fees</span></button>
+<button class="nav-btn" data-tab="notes"><span class="material-icons-round">menu_book</span><span>Notes</span></button>
+<button class="nav-btn" data-tab="more"><span class="material-icons-round">more_horiz</span><span>More</span></button>
+</nav></div>
+<script>
+let students=[],fees=[],notes=[],doubts=[],tests=[],results=[],stats={},currentTab='dashboard';
+const API=async(url,opts)=>{const r=await fetch(url,opts);return r.json()};
+const POST=(url,body)=>API(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const PUT=(url,body)=>API(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const DEL=url=>fetch(url,{method:'DELETE'}).then(r=>r.json());
+const months=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate=ms=>{if(!ms)return'';const d=new Date(typeof ms==='string'?parseInt(ms):ms);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
+const fmtRel=ms=>{if(!ms)return'';const d=Date.now()-ms;return d<60000?'Just now':d<3600000?Math.floor(d/60000)+'m ago':d<86400000?Math.floor(d/3600000)+'h ago':fmtDate(ms)};
+
+async function init(){
+  const s=await API('/api/session');
+  if(!s.user||s.user.role!=='TEACHER')return location.href='/';
+  document.getElementById('userName').textContent=s.user.name;
+  await loadAll();render();
+  document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentTab=b.dataset.tab;render()});
+}
+async function loadAll(){[stats,students,fees,notes,doubts,tests,results]=await Promise.all([API('/api/stats'),API('/api/students'),API('/api/fees'),API('/api/notes'),API('/api/doubts'),API('/api/tests'),API('/api/results')])}
+function render(){document.getElementById('content').innerHTML={dashboard:dashboardHTML,students:studentsHTML,fees:feesHTML,notes:notesHTML,more:moreHTML}[currentTab]();bindEvents()}
+
+function dashboardHTML(){const s=document.getElementById('userName')?.textContent||'Teacher';return`
+<div class="page-title">Welcome back! 👋<h2>${s}</h2></div>
+<div class="stats-grid">
+<div class="stat-card indigo" onclick="switchTab('students')"><span class="material-icons-round">people</span><div><h3>${stats.students}</h3><p>Students</p></div></div>
+<div class="stat-card red" onclick="switchTab('fees')"><span class="material-icons-round">account_balance_wallet</span><div><h3>${stats.pendingFees}</h3><p>Pending Fees</p></div></div>
+<div class="stat-card emerald"><span class="material-icons-round">quiz</span><div><h3>${stats.upcomingTests}</h3><p>Upcoming Tests</p></div></div>
+<div class="stat-card amber"><span class="material-icons-round">help</span><div><h3>${stats.openDoubts}</h3><p>Open Doubts</p></div></div>
+</div>
+<div class="section-title">Quick Actions</div>
+<div class="quick-actions">
+<button class="qa-btn" onclick="showAddStudent()"><span class="material-icons-round">person_add</span>Add Student</button>
+<button class="qa-btn" onclick="switchTab('notes')"><span class="material-icons-round">upload_file</span>Upload Notes</button>
+<button class="qa-btn" onclick="switchTab('more')"><span class="material-icons-round">event</span>Schedule Test</button>
+<button class="qa-btn" onclick="switchTab('fees')"><span class="material-icons-round">receipt</span>View Fees</button>
+</div>
+${tests.filter(t=>t.date>Date.now()).slice(0,3).map(t=>`<div class="list-card"><span class="material-icons-round card-icon">assignment</span><div class="card-body"><strong>${t.title}</strong><small>${t.subject} • ${fmtDate(t.date)} ${t.time}</small></div><span class="chip green-chip">Upcoming</span></div>`).join('')}
+${doubts.filter(d=>d.status==='OPEN').slice(0,3).map(d=>`<div class="list-card"><span class="material-icons-round card-icon">help</span><div class="card-body"><strong>${d.studentName}: ${d.subject}</strong><small>${d.question.slice(0,60)}...</small></div><span class="chip amber-chip">Open</span></div>`).join('')}`}
+
+
+function studentsHTML(){return`
+<div class="page-title"><h2>Students</h2><button class="fab-inline" onclick="showAddStudent()"><span class="material-icons-round">person_add</span>Add Student</button></div>
+<input class="search-bar" placeholder="Search students..." oninput="filterStudents(this.value)">
+<div id="studentList">${renderStudentList(students)}</div>`}
+function renderStudentList(list){return list.length?list.map(s=>`<div class="list-card"><div class="avatar">${s.name[0]}</div><div class="card-body"><strong>${s.name}</strong><small>${s.userId} • Class ${s.studentClass} • ₹${s.monthlyFee||0}/mo</small><small>📱 ${s.phone||'N/A'}${s.parentPhone?' • Parent: '+s.parentPhone:''}</small></div><div class="card-actions"><button class="icon-btn" onclick="editStudent('${s.userId}')"><span class="material-icons-round">edit</span></button><button class="icon-btn red-text" onclick="deleteStudent('${s.userId}','${s.name}')"><span class="material-icons-round">delete</span></button></div></div>`).join(''):'<div class="empty"><span class="material-icons-round">person_off</span><p>No students yet</p></div>'}
+
+function feesHTML(){
+const grouped={};fees.forEach(f=>{const k=f.studentId;if(!grouped[k])grouped[k]={name:f.studentName||f.studentId,id:k,fees:[],paid:0,unpaid:0};grouped[k].fees.push(f);if(f.status==='PAID')grouped[k].paid++;else grouped[k].unpaid++});
+const stuList=Object.values(grouped);
+return`<div class="page-title"><h2>Fees Management</h2></div>
+${stuList.length?stuList.map(s=>`<div class="list-card column" style="cursor:pointer" onclick="toggleStudentFees('${s.id}')">
+<div class="card-row"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${s.name[0]}</div><div><strong style="font-size:14px">${s.name}</strong><small style="display:block;color:var(--gray)">${s.id} • ${s.fees.length} months</small></div></div><div style="text-align:right"><span class="chip green-chip">${s.paid} Paid</span> <span class="chip ${s.unpaid?'red-chip':'gray-chip'}">${s.unpaid} Due</span><span class="material-icons-round" style="display:block;text-align:center;font-size:18px;color:var(--gray);margin-top:4px" id="arrow-${s.id}">expand_more</span></div></div>
+<div id="fees-${s.id}" style="display:none;margin-top:10px;border-top:1px solid var(--light-gray);padding-top:10px">${renderStudentFees(s.fees)}</div></div>`).join(''):'<div class="empty"><span class="material-icons-round">receipt_long</span><p>No fee records. Add students with fee setup to see records here.</p></div>'}`}
+function toggleStudentFees(id){const el=document.getElementById('fees-'+id);const arrow=document.getElementById('arrow-'+id);if(el.style.display==='none'){el.style.display='block';arrow.textContent='expand_less'}else{el.style.display='none';arrow.textContent='expand_more'}}
+function renderStudentFees(list){const now=new Date(),curM=now.getMonth()+1,curY=now.getFullYear();return list.map(f=>{const overdue=f.status!=='PAID'&&(f.year<curY||(f.year===curY&&f.month<curM));return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;margin:4px 0;background:var(--bg);border-radius:10px;border:1px solid var(--light-gray)"><div><strong style="font-size:13px">${months[f.month]} ${f.year}</strong><span class="fee-amount" style="font-size:16px">₹${f.amount}</span>${overdue?'<span class="overdue-badge"><span class="material-icons-round" style="font-size:11px">warning</span>Overdue</span>':''}${f.paidDate?`<small class="green-text" style="display:block">Paid: ${fmtDate(f.paidDate)}</small>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="chip ${f.status==='PAID'?'green-chip':'red-chip'}">${f.status}</span>${f.status!=='PAID'?`<button class="small-btn green-btn" onclick="event.stopPropagation();payFee(${f.feeId})">Paid</button>`:`<button class="small-btn outline-btn" onclick="event.stopPropagation();unpayFee(${f.feeId})">Undo</button>`}<button class="icon-btn red-text" onclick="event.stopPropagation();deleteFee(${f.feeId})" style="padding:2px"><span class="material-icons-round" style="font-size:16px">delete</span></button></div></div>`}).join('')}
+
+function notesHTML(){return`
+<div class="page-title"><h2>Study Material</h2><button class="fab-inline" onclick="showAddNote()"><span class="material-icons-round">upload_file</span>Upload</button></div>
+<div id="noteList">${notes.map(n=>`<div class="list-card"><span class="material-icons-round card-icon">${n.type==='PDF'?'picture_as_pdf':n.type==='IMAGE'?'image':n.type==='VIDEO'?'video_library':'link'}</span><div class="card-body"><strong>${n.title}</strong><small>${n.subject}${n.topic?' • '+n.topic:''} • ${n.targetStudentId==='ALL'?'All Students':n.targetStudentId}</small>${n.description?`<small>${n.description}</small>`:''}${n.filePath?`<a href="${n.filePath}" class="file-link"><span class="material-icons-round">download</span>View/Download</a>`:''}${n.content&&!n.filePath?`<a href="${n.content}" class="file-link"><span class="material-icons-round">open_in_new</span>Open Link</a>`:''}<small class="muted">${fmtRel(n.uploadDate)}</small></div><button class="icon-btn red-text" onclick="deleteNote(${n.noteId})"><span class="material-icons-round">delete</span></button></div>`).join('')||'<div class="empty"><span class="material-icons-round">menu_book</span><p>No notes</p></div>'}</div>`}
+
+function moreHTML(){return`<div class="page-title"><h2>More</h2></div>
+<div class="sub-tabs"><button class="sub-tab active" data-subtab="tests" onclick="showSubTab('tests',this)">Tests</button><button class="sub-tab" data-subtab="doubts" onclick="showSubTab('doubts',this)">Doubts</button><button class="sub-tab" data-subtab="results" onclick="showSubTab('results',this)">Results</button><button class="sub-tab" data-subtab="settings" onclick="showSubTab('settings',this)">Settings</button></div><div id="subContent">${testsSubHTML()}</div>`}
+function testsSubHTML(){return`<div class="sub-header"><button class="fab-inline" onclick="showAddTest()"><span class="material-icons-round">event</span>Add Test</button></div>${tests.map(t=>{const past=t.date<Date.now();const tid=t.testId||t.testid;return`<div class="list-card"><span class="material-icons-round card-icon">assignment</span><div class="card-body"><strong>${t.title}</strong><small>${t.subject} • ${fmtDate(t.date)} ${t.time}</small><small>Target: ${t.targetStudentId==='ALL'?'All':t.targetStudentId}</small></div><span class="chip ${past?'gray-chip':'green-chip'}">${past?'Done':'Upcoming'}</span><button class="icon-btn red-text" onclick="deleteTest(${tid})"><span class="material-icons-round">delete</span></button></div>`}).join('')||'<div class="empty"><span class="material-icons-round">event</span><p>No tests</p></div>'}`}
+function doubtsSubHTML(){return doubts.map(d=>`<div class="list-card column"><div class="card-row"><div class="card-body"><strong>${d.studentName||d.studentId} - ${d.subject}</strong><small>${d.question}</small></div><span class="chip ${d.status==='OPEN'?'amber-chip':'green-chip'}">${d.status}</span></div>${d.reply?`<div class="reply-box"><strong>Reply:</strong> ${d.reply}</div>`:''}${d.status==='OPEN'?`<div class="reply-input"><input placeholder="Type reply..." id="reply-${d.doubtId}"><button class="small-btn primary-btn" onclick="replyDoubt(${d.doubtId})">Send</button></div>`:''}</div>`).join('')||'<div class="empty"><span class="material-icons-round">help</span><p>No doubts</p></div>'}
+function resultsSubHTML(){return`<div class="sub-header"><button class="fab-inline" onclick="showAddResult()"><span class="material-icons-round">add_chart</span>Upload Marks</button></div>${results.map(r=>{const pct=Math.round(r.marksObtained/r.totalMarks*100);return`<div class="list-card"><div class="card-body"><strong>${r.studentName||r.studentId} - ${r.testName||'Test'}</strong><small>${r.marksObtained}/${r.totalMarks} (${pct}%) • ${r.remarks||''}</small></div><span class="chip ${pct>=80?'green-chip':pct>=50?'amber-chip':'red-chip'}">${pct}%</span></div>`}).join('')||'<div class="empty"><span class="material-icons-round">assessment</span><p>No results</p></div>'}`}
+function settingsSubHTML(){return`<div class="settings-section"><h3>👤 Your Profile</h3><input class="input-field" id="teacherName" placeholder="Your Display Name" value="${document.getElementById('userName')?.textContent||''}"><button class="small-btn primary-btn" onclick="updateName()">Update Name</button><div id="nameMsg"></div><hr class="divider"><h3>💳 Payment QR Code</h3><p class="muted">Upload your UPI QR code. Students see this in their fee payment section.</p><form id="qrForm" enctype="multipart/form-data"><input type="file" accept="image/*" name="qr" id="qrInput" class="file-input" onchange="document.getElementById('qrFileName').textContent=this.files[0]?this.files[0].name:''"><label for="qrInput" class="file-label"><span class="material-icons-round">qr_code</span>Choose QR Image</label><div id="qrFileName" class="muted" style="margin-bottom:10px;font-size:12px;color:var(--primary)"></div><button type="submit" class="small-btn primary-btn">Upload QR</button></form><div id="qrPreview"></div><hr class="divider"><h3>🔑 Change Password</h3><input type="password" id="oldPwd" placeholder="Current Password" class="input-field"><input type="password" id="newPwd" placeholder="New Password" class="input-field"><button class="small-btn primary-btn" onclick="changePwd()">Update Password</button><div id="pwdMsg"></div></div>`}
+function showSubTab(tab,btn){document.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('subContent').innerHTML={tests:testsSubHTML,doubts:doubtsSubHTML,results:resultsSubHTML,settings:settingsSubHTML}[tab]();if(tab==='settings')loadQR();bindEvents()}
+
+function switchTab(tab){currentTab=tab;document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab)});render()}
+function filterStudents(q){const f=students.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.userId.toLowerCase().includes(q.toLowerCase()));document.getElementById('studentList').innerHTML=renderStudentList(f)}
+
+function modal(title,body,onSave,saveText){const m=document.createElement('div');m.className='modal-overlay';m.innerHTML=`<div class="modal"><div class="modal-header"><h3>${title}</h3><button class="icon-btn" onclick="this.closest('.modal-overlay').remove()"><span class="material-icons-round">close</span></button></div><div class="modal-body">${body}</div><div class="modal-footer"><button class="small-btn outline-btn" id="modalCancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button class="small-btn primary-btn" id="modalSave">${saveText||'Save'}</button></div></div>`;document.body.appendChild(m);const saveBtn=document.getElementById('modalSave');saveBtn.onclick=async()=>{saveBtn.disabled=true;saveBtn.innerText='Wait...';document.getElementById('modalCancel').disabled=true;try{await onSave(m)}catch(e){alert('Error: '+e.message);saveBtn.disabled=false;saveBtn.innerText=saveText||'Save';document.getElementById('modalCancel').disabled=false}};m.onclick=e=>{if(e.target===m&&!saveBtn.disabled)m.remove()}}
+
+function showAddStudent(){const stuId='STU'+(100+Math.floor(Math.random()*900));const pwd=Math.random().toString(36).slice(-6);const curM=new Date().getMonth()+1;const curY=new Date().getFullYear();
+modal('Add New Student',`
+<h4>📝 Student Details</h4>
+<input class="input-field" id="mName" placeholder="Full Name" required>
+<div class="inline-row"><input class="input-field" id="mClass" placeholder="Class (e.g., 10th)"><input class="input-field" id="mPhone" placeholder="Phone Number"></div>
+<input class="input-field" id="mParentPhone" placeholder="Parent Phone (Optional)">
+<div class="divider"></div>
+<h4>🔐 Login Credentials</h4>
+<div class="inline-row"><input class="input-field" id="mUserId" placeholder="User ID" value="${stuId}"><input class="input-field" id="mPassword" placeholder="Password" value="${pwd}"></div>
+<div class="divider"></div>
+<h4>💰 Fee Setup (Auto-Generated)</h4>
+<input class="input-field" id="mFee" placeholder="Monthly Fee Amount (₹)" type="number" value="1500">
+<p class="muted" style="margin:-6px 0 8px">Fee records will be auto-created for the selected duration</p>
+<div class="inline-row"><select class="input-field" id="mStartMonth">${[...Array(12)].map((_,i)=>`<option value="${i+1}" ${i+1===curM?'selected':''}>${months[i+1]}</option>`).join('')}</select><input class="input-field" id="mStartYear" type="number" value="${curY}" placeholder="Year"></div>
+<select class="input-field" id="mDuration"><option value="1">1 Month</option><option value="3">3 Months</option><option value="6" selected>6 Months</option><option value="12">12 Months (1 Year)</option><option value="24">24 Months (2 Years)</option></select>`,async m=>{
+const name=v('mName');if(!name){alert('Name is required');return}
+const r=await POST('/api/students',{name,studentClass:v('mClass'),phone:v('mPhone'),parentPhone:v('mParentPhone'),userId:v('mUserId'),password:v('mPassword'),monthlyFee:parseFloat(v('mFee'))||0,startMonth:parseInt(v('mStartMonth')),startYear:parseInt(v('mStartYear')),durationMonths:parseInt(v('mDuration'))});
+if(r.error){alert(r.error);return}m.remove();alert(`✅ Student Created!\n\nUser ID: ${r.userId}\nPassword: ${r.password}\n\nFee records auto-generated for ${v('mDuration')} months.\nShare credentials with the student.`);await loadAll();render()},'Create Student')}
+
+function editStudent(id){const s=students.find(x=>x.userId===id);if(!s)return;
+modal('Edit Student',`<input class="input-field" id="mName" value="${s.name}"><input class="input-field" id="mClass" value="${s.studentClass}"><input class="input-field" id="mPhone" value="${s.phone}"><input class="input-field" id="mParentPhone" value="${s.parentPhone}"><input class="input-field" id="mFee" value="${s.monthlyFee||0}" type="number" placeholder="Monthly Fee (₹)">`,async m=>{
+await PUT('/api/students/'+id,{name:v('mName'),studentClass:v('mClass'),phone:v('mPhone'),parentPhone:v('mParentPhone'),monthlyFee:parseFloat(v('mFee'))||0});m.remove();await loadAll();render()})}
+async function deleteStudent(id,name){if(!confirm(`Delete ${name}?\nThis also deletes ALL their fee records, doubts, and results.`))return;await DEL('/api/students/'+id);await loadAll();render()}
+async function payFee(id){await PUT('/api/fees/'+id+'/pay',{});await loadAll();render()}
+async function unpayFee(id){await PUT('/api/fees/'+id+'/unpay',{});await loadAll();render()}
+async function deleteFee(id){if(!confirm('Delete this fee record?'))return;await DEL('/api/fees/'+id);await loadAll();render()}
+async function deleteNote(id){if(!confirm('Delete this note?'))return;await DEL('/api/notes/'+id);await loadAll();render()}
+async function deleteTest(id){
+  const tid = id || 0;
+  if(!confirm('Delete this test?'))return;
+  console.log('Deleting test:', tid);
+  await DEL('/api/tests/'+tid);
+  await loadAll();
+  render();
+}
+
+function showAddNote(){modal('Upload Study Material',`<input class="input-field" id="mTitle" placeholder="Title"><input class="input-field" id="mSubject" placeholder="Subject"><input class="input-field" id="mTopic" placeholder="Topic (Optional)">
+<select class="input-field" id="mType"><option value="PDF">📄 PDF</option><option value="IMAGE">🖼️ Image</option><option value="VIDEO">🎥 Video</option><option value="LINK">🔗 Link/URL</option></select>
+<input type="file" id="mFile" class="file-input" accept=".pdf,image/*,video/*" onchange="document.getElementById('fileName').textContent=this.files[0]?this.files[0].name:''"><label for="mFile" class="file-label"><span class="material-icons-round">cloud_upload</span>Choose File (PDF/Image/Video)</label><div id="fileName" class="muted" style="margin-bottom:10px;font-size:12px;color:var(--primary)"></div>
+<input class="input-field" id="mContent" placeholder="Or paste URL/Link here">
+<textarea class="input-field" id="mDesc" placeholder="Description (Optional)" rows="2"></textarea>
+<select class="input-field" id="mTarget"><option value="ALL">📢 All Students</option>${students.map(s=>`<option value="${s.userId}">👤 ${s.name} (${s.userId})</option>`).join('')}</select>`,async m=>{
+const fd=new FormData();fd.append('title',v('mTitle'));fd.append('subject',v('mSubject'));fd.append('topic',v('mTopic'));fd.append('type',v('mType'));fd.append('content',v('mContent'));fd.append('description',v('mDesc'));fd.append('targetStudentId',v('mTarget'));
+const f=document.getElementById('mFile').files[0];if(f)fd.append('file',f);
+const res=await fetch('/api/notes',{method:'POST',body:fd});
+if(!res.ok){const errText=await res.text();throw new Error('Server returned '+res.status+': '+errText)}
+m.remove();await loadAll();render()},'Upload')}
+
+function showAddTest(){modal('Schedule Test',`<input class="input-field" id="mTitle" placeholder="Test Title"><input class="input-field" id="mSubject" placeholder="Subject"><input class="input-field" id="mDate" type="date"><input class="input-field" id="mTime" placeholder="Time" value="10:00 AM"><textarea class="input-field" id="mSyllabus" placeholder="Syllabus" rows="2"></textarea><input class="input-field" id="mMarks" type="number" placeholder="Total Marks" value="100"><select class="input-field" id="mTarget"><option value="ALL">All Students</option>${students.map(s=>`<option value="${s.userId}">${s.name} (${s.userId})</option>`).join('')}</select>`,async m=>{
+  const dateStr=v('mDate');
+  if(!dateStr){alert('Please select a date');return}
+  const d=new Date(dateStr).getTime();
+  await POST('/api/tests',{subject:v('mSubject'),title:v('mTitle'),date:d,time:v('mTime'),syllabus:v('mSyllabus'),totalMarks:parseInt(v('mMarks'))||100,targetStudentId:v('mTarget')});
+  m.remove();await loadAll();render()
+},'Schedule')}
+
+function showAddResult(){modal('Upload Marks',`<select class="input-field" id="mStu"><option value="">Select Student</option>${students.map(s=>`<option value="${s.userId}">${s.name} (${s.userId})</option>`).join('')}</select><input class="input-field" id="mTestName" placeholder="Test/Exam Name (e.g. Unit Test - Maths)"><input class="input-field" id="mMarks" type="number" placeholder="Marks Obtained"><input class="input-field" id="mTotal" type="number" placeholder="Total Marks" value="100"><input class="input-field" id="mRemarks" placeholder="Remarks/Feedback">`,async m=>{const stu=v('mStu'),marks=v('mMarks');if(!stu){alert('Please select a student');return}if(!marks){alert('Please enter marks');return}const r=await POST('/api/results',{testName:v('mTestName'),studentId:stu,marksObtained:parseInt(marks),totalMarks:parseInt(v('mTotal'))||100,remarks:v('mRemarks')});if(r.error){alert(r.error);return}m.remove();await loadAll();render();setTimeout(()=>document.querySelector('[data-subtab=results]')?.click(),50)},'Upload')}
+
+async function replyDoubt(id){const input=document.getElementById('reply-'+id);if(!input?.value?.trim())return;await PUT('/api/doubts/'+id+'/reply',{reply:input.value.trim()});await loadAll();currentTab='more';render();setTimeout(()=>document.querySelector('[data-subtab=doubts]')?.click(),50)}
+async function loadQR(){const d=await API('/api/teacher/qr');const el=document.getElementById('qrPreview');if(el&&d.qrPath)el.innerHTML=`<img src="${d.qrPath}" class="qr-img">`}
+async function updateName(){const name=document.getElementById('teacherName')?.value?.trim();if(!name)return;const r=await POST('/api/teacher/name',{name});document.getElementById('nameMsg').innerHTML=r.error?`<span class="red-text">${r.error}</span>`:'<span class="green-text">✅ Name updated!</span>';if(!r.error)document.getElementById('userName').textContent=name}
+async function changePwd(){const r=await POST('/api/change-password',{oldPassword:v('oldPwd'),newPassword:v('newPwd')});document.getElementById('pwdMsg').innerHTML=r.error?`<span class="red-text">${r.error}</span>`:'<span class="green-text">✅ Password updated!</span>'}
+async function logout(){await POST('/api/logout',{});location.href='/'}
+function v(id){return document.getElementById(id)?.value?.trim()||''}
+function bindEvents(){const fi=document.getElementById('mFile');if(fi)fi.onchange=()=>{document.getElementById('fileName').textContent=fi.files[0]?.name||''};const qf=document.getElementById('qrForm');if(qf)qf.onsubmit=async e=>{e.preventDefault();const fd=new FormData();fd.append('qr',document.getElementById('qrInput').files[0]);await fetch('/api/teacher/qr',{method:'POST',body:fd});loadQR()}}
+
+// Notification system
+async function checkNotifs(){try{const r=await API('/api/notifications/unread-count');const b=document.getElementById('notifBadge');if(r.count>0){b.textContent=r.count;b.style.display='flex'}else{b.style.display='none'}}catch(e){}}
+function showNotifs(){const m=document.createElement('div');m.className='modal-overlay';m.innerHTML=`<div class="modal"><div class="modal-header"><h3>🔔 Notifications</h3><button class="icon-btn" onclick="closeNotifs(this)"><span class="material-icons-round">close</span></button></div><div class="modal-body" id="notifList" style="max-height:400px;overflow-y:auto"><p class="muted">Loading...</p></div><div class="modal-footer" style="justify-content:space-between"><button class="small-btn red-text" onclick="clearNotifs(this)">Clear All</button><button class="small-btn primary-btn" onclick="markAllRead(this)">Mark All Read</button></div></div>`;document.body.appendChild(m);m.onclick=e=>{if(e.target===m)m.remove()};loadNotifList()}
+async function loadNotifList(){const notifs=await API('/api/notifications');document.getElementById('notifList').innerHTML=notifs.length?notifs.map(n=>`<div class="list-card" style="${n.read?'opacity:0.6':''}padding:10px"><span class="material-icons-round card-icon">${n.type==='DOUBT'?'help':n.type==='FEE_REMINDER'?'warning':'notifications'}</span><div class="card-body"><strong style="font-size:13px">${n.title}</strong><small>${n.message}</small><small class="muted">${fmtRel(n.createdAt)}</small></div></div>`).join(''):'<div class="empty"><span class="material-icons-round">notifications_off</span><p>No notifications</p></div>'}
+async function markAllRead(btn){await PUT('/api/notifications/read-all',{});btn.closest('.modal-overlay').remove();checkNotifs()}
+async function clearNotifs(btn){
+  if(!confirm('Clear all notifications?'))return;
+  await fetch('/api/notifications/clear',{method:'POST'});
+  btn.closest('.modal-overlay').remove();
+  checkNotifs();
+}
+function closeNotifs(btn){btn.closest('.modal-overlay').remove()}
+
+// FCM Token Registration
+function onFCMTokenReceived(token){if(token)POST('/api/fcm-token',{token})}
+if(window.fcmToken)onFCMTokenReceived(window.fcmToken);
+
+// Auto-poll every 15 seconds for updates
+ setInterval(async()=>{
+   try {
+     await loadAll();
+     checkNotifs();
+     // Only re-render if we are on dashboard or if we really need to update a list
+     if (currentTab === 'dashboard') render();
+   } catch(e){}
+ }, 15000);
+checkNotifs();
+init();
+</script></body></html>
