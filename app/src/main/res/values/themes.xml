@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ShreeJiClasses" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/saffron_orange</item>
+        <item name="android:navigationBarColor">@color/warm_white</item>
+        <item name="android:windowBackground">@color/warm_white</item>
+    </style>
+
+    <!-- Immersive dark splash theme -->
+    <style name="Theme.ShreeJiClasses.Splash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+    </style>
+</resources>

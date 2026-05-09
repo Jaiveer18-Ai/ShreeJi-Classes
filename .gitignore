@@ -1,0 +1,19 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Android/Gradle
+.gradle/
+app/build/
+build/
+local.properties
+.idea/
+*.iml
+
+# Uploads and temporary data
+web/uploads/notes/
+web/uploads/qr/
+web/database.sqlite
+web/database.sqlite-journal
+web/.env

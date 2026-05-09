@@ -1,0 +1,18 @@
+{
+  "name": "shreeji-classes",
+  "version": "1.0.0",
+  "description": "ShreeJi Classes - Tuition Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cloudinary": "^2.10.0",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "firebase-admin": "^13.8.0",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.1"
+  }
+}

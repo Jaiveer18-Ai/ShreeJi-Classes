@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "152170545222",
+    "project_id": "shreeji-classes-1efd3",
+    "storage_bucket": "shreeji-classes-1efd3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:152170545222:android:894c94190dbd25c9a5ca47",
+        "android_client_info": {
+          "package_name": "com.shreejicls.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKu9fcyuChbjh1ASo7A69ytjN0LeCqNhQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

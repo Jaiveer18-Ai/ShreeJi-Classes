@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin - ShreeJi Classes</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head><body>
+<div class="app">
+<header><img src="/logo.jpg" alt="Logo" style="width:32px;height:32px;border-radius:8px;object-fit:cover"><h1 class="brand">SHREE JI CLASSES</h1><div class="header-actions"><span style="font-size:11px;background:var(--primary-bg);color:var(--primary);padding:2px 8px;border-radius:6px;font-weight:700">ADMIN</span><button onclick="logout()" class="icon-btn"><span class="material-icons-round">logout</span></button></div></header>
+<main id="content"></main>
+</div>
+<script>
+let teachers=[],stats={};
+const API=async(url,opts)=>{const r=await fetch(url,opts);return r.json()};
+const POST=(url,body)=>API(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const DEL=url=>API(url,{method:'DELETE'});
+const fmtDate=ms=>ms?new Date(ms).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';
+
+async function init(){
+  const s=await API('/api/session');
+  if(!s.user||s.user.role!=='ADMIN')return location.href='/';
+  await loadAll();render();
+}
+async function loadAll(){[teachers,stats]=await Promise.all([API('/api/admin/teachers'),API('/api/admin/stats')])}
+
+function render(){document.getElementById('content').innerHTML=`
+<div class="page-title">Super Admin Panel 🛡️<h2>Manage Teachers</h2></div>
+<div class="stats-grid">
+<div class="stat-card indigo"><span class="material-icons-round">school</span><div><h3>${stats.teachers||0}</h3><p>Teachers</p></div></div>
+<div class="stat-card emerald"><span class="material-icons-round">people</span><div><h3>${stats.students||0}</h3><p>Total Students</p></div></div>
+</div>
+<div class="page-title" style="padding-top:12px"><h2 style="font-size:18px">Teachers</h2><button class="fab-inline" onclick="showAddTeacher()"><span class="material-icons-round">person_add</span>Add Teacher</button></div>
+${teachers.length?teachers.map(t=>`<div class="list-card"><div class="avatar" style="background:linear-gradient(135deg,var(--primary-light),var(--primary));color:#fff">${t.name[0]}</div><div class="card-body"><strong>${t.name}</strong><small>ID: ${t.userId} ${t.phone?'• 📱 '+t.phone:''}</small><small class="muted">Added: ${fmtDate(t.createdAt)}</small></div><button class="icon-btn red-text" onclick="deleteTeacher('${t.userId}','${t.name}')"><span class="material-icons-round">delete</span></button></div>`).join(''):'<div class="empty"><span class="material-icons-round">school</span><p>No teachers yet. Add your first teacher!</p></div>'}
+<hr class="divider" style="margin:20px 16px">
+<div class="settings-section"><h3>🔑 Change Admin Password</h3><input type="password" id="oldPwd" placeholder="Current Password" class="input-field"><input type="password" id="newPwd" placeholder="New Password" class="input-field"><button class="small-btn primary-btn" onclick="changePwd()">Update Password</button><div id="pwdMsg"></div></div>`}
+
+function showAddTeacher(){const m=document.createElement('div');m.className='modal-overlay';m.innerHTML=`<div class="modal"><div class="modal-header"><h3>Add New Teacher</h3><button class="icon-btn" onclick="this.closest('.modal-overlay').remove()"><span class="material-icons-round">close</span></button></div><div class="modal-body">
+<h4 style="color:var(--primary);font-size:14px;margin-bottom:8px">👨‍🏫 Teacher Details</h4>
+<input class="input-field" id="tName" placeholder="Full Name" required>
+<input class="input-field" id="tPhone" placeholder="Phone Number">
+<hr class="divider">
+<h4 style="color:var(--primary);font-size:14px;margin-bottom:8px">🔐 Login Credentials</h4>
+<input class="input-field" id="tUserId" placeholder="Login User ID (e.g. teacher01)">
+<input class="input-field" id="tPassword" placeholder="Password">
+<p class="muted" style="margin-top:-6px">Share these credentials with the teacher so they can login.</p>
+</div><div class="modal-footer"><button class="small-btn outline-btn" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button class="small-btn primary-btn" onclick="addTeacher(this)">Create Teacher</button></div></div>`;document.body.appendChild(m);m.onclick=e=>{if(e.target===m)m.remove()}}
+
+async function addTeacher(btn){
+  const name=document.getElementById('tName').value.trim();
+  const userId=document.getElementById('tUserId').value.trim();
+  const password=document.getElementById('tPassword').value.trim();
+  const phone=document.getElementById('tPhone').value.trim();
+  if(!name||!userId||!password){alert('Name, User ID & Password are required');return}
+  const r=await POST('/api/admin/teachers',{name,userId,password,phone});
+  if(r.error){alert(r.error);return}
+  btn.closest('.modal-overlay').remove();
+  alert(`✅ Teacher Created!\n\nName: ${name}\nUser ID: ${userId}\nPassword: ${password}\n\nShare these credentials with the teacher.`);
+  await loadAll();render();
+}
+async function deleteTeacher(id,name){if(!confirm(`Delete teacher "${name}"?\n\nThis will remove their account. Students they created will remain.`))return;await DEL('/api/admin/teachers/'+id);await loadAll();render()}
+async function changePwd(){const r=await POST('/api/change-password',{oldPassword:document.getElementById('oldPwd').value,newPassword:document.getElementById('newPwd').value});document.getElementById('pwdMsg').innerHTML=r.error?`<span class="red-text">${r.error}</span>`:'<span class="green-text">✅ Password updated!</span>'}
+async function logout(){await POST('/api/logout',{});location.href='/'}
+init();
+</script></body></html>

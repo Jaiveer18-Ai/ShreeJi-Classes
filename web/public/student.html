@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student - ShreeJi Classes</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head><body>
+<div class="app">
+<header><img src="/logo.jpg" alt="Logo" style="width:32px;height:32px;border-radius:8px;object-fit:cover"><h1 class="brand">SHREE JI CLASSES</h1><div class="header-actions"><button class="icon-btn notif-btn" onclick="showNotifs()" id="notifBtn"><span class="material-icons-round">notifications</span><span class="notif-badge" id="notifBadge" style="display:none">0</span></button><span id="userName"></span><button onclick="logout()" class="icon-btn"><span class="material-icons-round">logout</span></button></div></header>
+<main id="content"></main>
+<nav class="bottom-nav">
+<button class="nav-btn active" data-tab="dashboard"><span class="material-icons-round">home</span><span>Home</span></button>
+<button class="nav-btn" data-tab="notes"><span class="material-icons-round">menu_book</span><span>Study</span></button>
+<button class="nav-btn" data-tab="doubts"><span class="material-icons-round">help</span><span>Doubts</span></button>
+<button class="nav-btn" data-tab="profile"><span class="material-icons-round">person</span><span>Profile</span></button>
+</nav></div>
+<script>
+let user=null,fees=[],notes=[],doubts=[],tests=[],results=[],qrPath='',currentTab='dashboard',teachers=[];
+const API=async(url,opts)=>{const r=await fetch(url,opts);return r.json()};
+const POST=(url,body)=>API(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const PUT=(url,body)=>API(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const DEL=url=>fetch(url,{method:'DELETE'}).then(r=>r.json());
+const months=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate=ms=>{if(!ms)return'';const d=new Date(typeof ms==='string'?parseInt(ms):ms);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
+const fmtRel=ms=>{if(!ms)return'';const d=Date.now()-ms;return d<60000?'Just now':d<3600000?Math.floor(d/60000)+'m ago':d<86400000?Math.floor(d/3600000)+'h ago':fmtDate(ms)};
+
+async function init(){
+  const s=await API('/api/session');if(!s.user||s.user.role!=='STUDENT')return location.href='/';
+  user=s.user;document.getElementById('userName').textContent=user.name;
+  await loadAll();render();
+  document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentTab=b.dataset.tab;render()});
+}
+async function loadAll(){[fees,notes,doubts,tests,results,teachers]=await Promise.all([API('/api/fees?studentId='+user.userId),API('/api/notes'),API('/api/doubts'),API('/api/tests'),API('/api/results'),API('/api/teachers')]);const q=await API('/api/teacher/qr');qrPath=q.qrPath||''}
+function render(){document.getElementById('content').innerHTML={dashboard:dashHTML,notes:notesHTML,doubts:doubtsHTML,profile:profileHTML}[currentTab]()}
+
+function dashHTML(){const now=new Date(),curM=now.getMonth()+1,curY=now.getFullYear();const overdue=fees.filter(f=>f.status!=='PAID'&&(f.year<curY||(f.year===curY&&f.month<curM)));const pending=fees.filter(f=>f.status!=='PAID');const latest=results[0];const upcoming=tests.filter(t=>t.date>Date.now());
+return`<div class="page-title">Welcome back! 👋<h2>${user.name}</h2></div>
+<div class="stats-grid">
+<div class="stat-card ${overdue.length?'red':pending.length?'amber':'emerald'}"><span class="material-icons-round">account_balance_wallet</span><div><h3>${overdue.length?'⚠️ '+overdue.length:pending.length?pending.length:'✓'}</h3><p>${overdue.length?overdue.length+' month(s) overdue':pending.length?pending.length+' months due':'All fees clear!'}</p></div></div>
+<div class="stat-card indigo"><span class="material-icons-round">quiz</span><div><h3>${upcoming.length}</h3><p>Upcoming Tests</p></div></div>
+</div>
+${overdue.length?`<div class="highlight-card" style="background:#FEE2E2;border-color:#FCA5A5;margin:8px 16px;border-radius:14px;padding:14px"><div style="display:flex;align-items:center;gap:8px"><span class="material-icons-round" style="color:#DC2626">warning</span><div><strong style="color:#DC2626;font-size:13px">Overdue Fees!</strong><small style="display:block;color:#991B1B;font-size:11px">${overdue.map(f=>months[f.month]+' '+f.year).join(', ')} - Please pay immediately</small></div></div></div>`:''}
+${latest?`<div class="highlight-card green-bg"><div><span class="label">Latest Score</span><h3>${latest.marksObtained}/${latest.totalMarks}</h3>${latest.remarks?`<small style="color:#047857">${latest.remarks}</small>`:''}</div><span class="chip ${Math.round(latest.marksObtained/latest.totalMarks*100)>=80?'green-chip':'amber-chip'}">${Math.round(latest.marksObtained/latest.totalMarks*100)}%</span></div>`:''}
+<div class="section-title">Latest Notes</div>
+${notes.slice(0,3).map(n=>`<div class="list-card"><span class="material-icons-round card-icon">${n.type==='PDF'?'picture_as_pdf':n.type==='IMAGE'?'image':'link'}</span><div class="card-body"><strong>${n.title}</strong><small>${n.subject}</small>${n.filePath?`<a href="${n.filePath}" class="file-link"><span class="material-icons-round">download</span>Download</a>`:''}</div></div>`).join('')||'<p class="muted" style="padding:16px">No notes yet</p>'}
+${upcoming.length?`<div class="section-title">Upcoming Tests</div>${upcoming.slice(0,2).map(t=>`<div class="list-card"><span class="material-icons-round card-icon">assignment</span><div class="card-body"><strong>${t.title}</strong><small>${t.subject} • ${fmtDate(t.date)} ${t.time}</small></div><span class="chip green-chip">Upcoming</span></div>`).join('')}`:''}`}
+
+function notesHTML(){return`<div class="page-title"><h2>Study Material</h2></div>
+<div class="sub-tabs"><button class="sub-tab active" onclick="showStudyTab('notes',this)">Notes</button><button class="sub-tab" onclick="showStudyTab('tests',this)">Tests</button></div>
+<div id="studyContent">${notesListHTML()}</div>`}
+function notesListHTML(){const subjects=[...new Set(notes.map(n=>n.subject))];return`<div class="filter-chips"><button class="chip-btn active" onclick="filterNotes('ALL',this)">All</button>${subjects.map(s=>`<button class="chip-btn" onclick="filterNotes('${s}',this)">${s}</button>`).join('')}</div><div id="noteItems">${renderNotes(notes)}</div>`}
+function renderNotes(list){return list.map(n=>`<div class="list-card"><span class="material-icons-round card-icon">${n.type==='PDF'?'picture_as_pdf':n.type==='IMAGE'?'image':n.type==='VIDEO'?'video_library':'link'}</span><div class="card-body"><strong>${n.title}</strong><small>${n.subject}${n.topic?' • '+n.topic:''}</small>${n.description?`<small>${n.description}</small>`:''}${n.filePath?`<a href="${n.filePath}" class="file-link"><span class="material-icons-round">download</span>View/Download</a>`:''}${n.content&&!n.filePath?`<a href="${n.content}" class="file-link"><span class="material-icons-round">open_in_new</span>Open</a>`:''}<small class="muted">${fmtRel(n.uploadDate)}</small></div></div>`).join('')||'<div class="empty"><span class="material-icons-round">menu_book</span><p>No notes</p></div>'}
+function testsListHTML(){return tests.map(t=>{const past=t.date<Date.now();const days=Math.ceil((t.date-Date.now())/86400000);return`<div class="list-card"><span class="material-icons-round card-icon">assignment</span><div class="card-body"><strong>${t.title}</strong><small>${t.subject} • ${fmtDate(t.date)} ${t.time}</small>${t.syllabus?`<small>Syllabus: ${t.syllabus}</small>`:''}</div><span class="chip ${past?'gray-chip':days<=2?'red-chip':'green-chip'}">${past?'Done':days<=1?'Tomorrow!':days+'d left'}</span></div>`}).join('')||'<div class="empty"><span class="material-icons-round">event</span><p>No tests</p></div>'}
+function showStudyTab(tab,btn){document.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('studyContent').innerHTML=tab==='notes'?notesListHTML():testsListHTML()}
+function filterNotes(s,btn){document.querySelectorAll('.chip-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('noteItems').innerHTML=renderNotes(s==='ALL'?notes:notes.filter(n=>n.subject===s))}
+
+function doubtsHTML(){return`<div class="page-title"><h2>Doubt Portal</h2><button class="fab-inline" onclick="showAskDoubt()"><span class="material-icons-round">add</span>Ask</button></div>
+${doubts.map(d=>`<div class="list-card column"><div class="card-row"><div><span class="chip indigo-chip">${d.subject}</span><span class="chip ${d.status==='OPEN'?'amber-chip':'green-chip'}">${d.status}</span></div><small class="muted">${fmtRel(d.createdAt)}</small></div><p class="question-text">${d.question}</p>${d.reply?`<div class="reply-box"><strong>🎓 Teacher's Reply</strong><p>${d.reply}</p></div>`:''}</div>`).join('')||'<div class="empty"><span class="material-icons-round">help</span><p>No doubts yet. Ask your first!</p></div>'}`}
+
+function profileHTML(){return`<div class="page-title"><h2>My Profile</h2></div>
+<div class="sub-tabs"><button class="sub-tab active" onclick="showProfileTab('fees',this)">Fees</button><button class="sub-tab" onclick="showProfileTab('progress',this)">Progress</button><button class="sub-tab" onclick="showProfileTab('settings',this)">Settings</button></div>
+<div id="profileContent">${feesTabHTML()}</div>`}
+function feesTabHTML(){const now=new Date(),curM=now.getMonth()+1,curY=now.getFullYear();return `<div class="profile-card" style="margin: 16px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 12px; display: flex; align-items: center; gap: 12px;">
+          <div class="avatar" style="width: 48px; height: 48px; border-radius: 50%; background: #4f46e5; display: flex; align-items: center; justify-content: center;"><span class="material-icons-round" style="font-size:32px;color:#fff">person</span></div>
+          <div>
+            <h2 style="margin:0 0 5px">${user.name}</h2>
+            <p class="muted" style="margin:0">ID: ${user.userId}</p>
+          </div>
+          <button class="small-btn primary-btn" onclick="alert(window.fcmToken || 'No token found')" style="margin-left:auto;">Show Token</button>
+        </div><div class="section-title">Fee History</div>
+${fees.map(f=>{const overdue=f.status!=='PAID'&&(f.year<curY||(f.year===curY&&f.month<curM));return`<div class="list-card"><div class="card-body"><strong>${months[f.month]} ${f.year}</strong><span class="fee-amount">₹${f.amount}</span>${overdue?'<span class="overdue-badge"><span class="material-icons-round" style="font-size:12px">warning</span>Overdue</span>':''}${f.paidDate?`<small class="green-text">Paid: ${fmtDate(f.paidDate)}</small>`:''}</div><span class="chip ${f.status==='PAID'?'green-chip':'red-chip'}">${f.status}</span></div>`}).join('')||'<p class="muted" style="padding:16px">No fee records</p>'}
+${qrPath?`<div class="section-title">Pay Fees via QR</div><div class="qr-section"><img src="${qrPath}" class="qr-img"><p class="muted">Scan this QR code to pay your fees via UPI</p></div>`:'<p class="muted" style="padding:16px;text-align:center">Online payment not set up yet</p>'}`}
+function progressTabHTML(){if(!results.length)return'<div class="empty"><span class="material-icons-round">trending_up</span><p>No results yet</p></div>';const chartData=results.slice(0,5).reverse().map((r,i)=>({label:'T'+(i+1),pct:Math.round(r.marksObtained/r.totalMarks*100)}));return`<div class="section-title">Performance</div><div class="chart-container"><div class="bar-chart">${chartData.map(d=>`<div class="bar-col"><span class="bar-val">${d.pct}%</span><div class="bar" style="height:${d.pct}%"></div><span class="bar-label">${d.label}</span></div>`).join('')}</div></div><div class="section-title">All Results</div>${results.map(r=>{const pct=Math.round(r.marksObtained/r.totalMarks*100);return`<div class="list-card"><div class="card-body"><strong>${r.testTitle||r.testName||'Test'} - ${r.subject||''}</strong><span class="fee-amount" style="font-size:16px">${r.marksObtained}/${r.totalMarks}</span>${r.remarks?`<small>${r.remarks}</small>`:''}</div><span class="chip ${pct>=80?'green-chip':pct>=50?'amber-chip':'red-chip'}">${pct}%</span></div>`}).join('')}`}
+function settingsTabHTML(){return`<div class="settings-section"><h3>🔑 Change Password</h3><input type="password" id="oldPwd" placeholder="Current Password" class="input-field"><input type="password" id="newPwd" placeholder="New Password" class="input-field"><button class="small-btn primary-btn" onclick="changePwd()">Update</button><div id="pwdMsg"></div></div>`}
+function showProfileTab(tab,btn){document.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('profileContent').innerHTML={fees:feesTabHTML,progress:progressTabHTML,settings:settingsTabHTML}[tab]()}
+
+function showAskDoubt(){const m=document.createElement('div');m.className='modal-overlay';m.innerHTML=`<div class="modal"><div class="modal-header"><h3>Ask a Doubt</h3><button class="icon-btn" onclick="this.closest('.modal-overlay').remove()"><span class="material-icons-round">close</span></button></div><div class="modal-body"><input class="input-field" id="mSubject" placeholder="Subject"><select class="input-field" id="mTeacher"><option value="ALL">All Teachers</option>${teachers.map(t=>`<option value="${t.userId}">${t.name}</option>`).join('')}</select><textarea class="input-field" id="mQuestion" placeholder="Your question..." rows="4"></textarea></div><div class="modal-footer"><button class="small-btn outline-btn" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button class="small-btn primary-btn" onclick="submitDoubt(this)">Submit</button></div></div>`;document.body.appendChild(m)}
+async function submitDoubt(btn){const s=document.getElementById('mSubject').value.trim(),q=document.getElementById('mQuestion').value.trim(),t=document.getElementById('mTeacher').value;if(!s||!q)return alert('Please fill both fields');await POST('/api/doubts',{subject:s,question:q,targetTeacherId:t});btn.closest('.modal-overlay').remove();await loadAll();render()}
+async function changePwd(){const r=await POST('/api/change-password',{oldPassword:document.getElementById('oldPwd').value,newPassword:document.getElementById('newPwd').value});document.getElementById('pwdMsg').innerHTML=r.error?`<span class="red-text">${r.error}</span>`:'<span class="green-text">✅ Updated!</span>'}
+async function logout(){await POST('/api/logout',{});location.href='/'}
+
+// Notifications
+async function checkNotifs(){try{const r=await API('/api/notifications/unread-count');const b=document.getElementById('notifBadge');if(r.count>0){b.textContent=r.count;b.style.display='flex'}else{b.style.display='none'}}catch(e){}}
+function showNotifs(){const m=document.createElement('div');m.className='modal-overlay';m.innerHTML=`<div class="modal"><div class="modal-header"><h3>🔔 Notifications</h3><button class="icon-btn" onclick="this.closest('.modal-overlay').remove()"><span class="material-icons-round">close</span></button></div><div class="modal-body" id="notifList" style="max-height:400px;overflow-y:auto"><p class="muted">Loading...</p></div><div class="modal-footer" style="justify-content:space-between"><button class="small-btn red-text" onclick="clearNotifs(this)">Clear All</button><button class="small-btn primary-btn" onclick="markAllRead(this)">Mark All Read</button></div></div>`;document.body.appendChild(m);m.onclick=e=>{if(e.target===m)m.remove()};loadNotifList()}
+async function loadNotifList(){const notifs=await API('/api/notifications');document.getElementById('notifList').innerHTML=notifs.length?notifs.map(n=>`<div class="list-card" style="${n.read?'opacity:0.6':''}padding:10px"><span class="material-icons-round card-icon">${n.type==='DOUBT_REPLY'?'chat':n.type==='FEE_REMINDER'||n.type==='FEE_PAID'?'account_balance_wallet':n.type==='MARKS'?'assessment':n.type==='TEST'?'assignment':'notifications'}</span><div class="card-body"><strong style="font-size:13px">${n.title}</strong><small>${n.message}</small><small class="muted">${fmtRel(n.createdAt)}</small></div></div>`).join(''):'<div class="empty"><span class="material-icons-round">notifications_off</span><p>No notifications</p></div>'}
+async function markAllRead(btn){await PUT('/api/notifications/read-all',{});btn.closest('.modal-overlay').remove();checkNotifs()}
+async function clearNotifs(btn){
+  if(!confirm('Clear all notifications?'))return;
+  await fetch('/api/notifications/clear',{method:'POST'});
+  btn.closest('.modal-overlay').remove();
+  checkNotifs();
+}
+
+// FCM Token Registration
+function onFCMTokenReceived(token){if(token)POST('/api/fcm-token',{token})}
+if(window.fcmToken)onFCMTokenReceived(window.fcmToken);
+
+// Auto-poll every 15s - only refresh data, don't re-render entire screen unless tab is dashboard
+setInterval(async()=>{
+  try{
+    const oldFees = JSON.stringify(fees);
+    await loadAll();
+    checkNotifs();
+    if(JSON.stringify(fees) !== oldFees && currentTab === 'dashboard') render();
+  }catch(e){}
+},15000);
+checkNotifs();
+init();
+</script></body></html>
